@@ -383,9 +383,9 @@ if (sessionStorage.getItem('chuchi_auth') === '1') {
       <span class="chip" onclick="sendQ('Give me my complete morning briefing')">☀️ Full briefing</span>
       <span class="chip" onclick="sendQ('What is on my Google Calendar today?')">📅 Today's calendar</span>
       <span class="chip" onclick="sendQ('Summarize my unread Gmail — urgent items only')">📬 Inbox summary</span>
-      <span class="chip" onclick="sendQ('What is the status on the Joel Bauer Mentoring 4 Million event and what should I do today?')">🚨 Joel Bauer update</span>
+      
       <span class="chip" onclick="sendQ('What should be my top 3 priorities for today?')">🎯 Today's priorities</span>
-      <span class="chip" onclick="sendQ('Draft a follow-up email for anyone who may have been affected by the order form issue for the Joel Bauer event')">✉️ Draft follow-up</span>
+      
     </div>
 
     <!-- INPUT -->
@@ -412,10 +412,7 @@ if (sessionStorage.getItem('chuchi_auth') === '1') {
         <div class="cal-time">1PM onwards</div>
         <div class="cal-evt">Calls / BD open</div>
       </div>
-      <div class="cal-card" onclick="sendQ('Tell me everything about the Joel Bauer Mentoring 4 Million event on April 25 and 26')">
-        <div class="cal-time">Apr 25–26 · San Jose</div>
-        <div class="cal-evt">🎤 Joel Bauer Event</div>
-      </div>
+      
     </div>
     <div>
       <div class="rp-title">Business Pulse</div>
@@ -427,10 +424,7 @@ if (sessionStorage.getItem('chuchi_auth') === '1') {
     </div>
     <div>
       <div class="rp-title">Gmail Highlights</div>
-      <div class="cal-card" onclick="sendQ('Tell me about the Joel Bauer order form issue email and what action I should take')">
-        <div class="cal-time" style="color:var(--danger)">⚠ Unread · Seminars</div>
-        <div class="cal-evt">I need to make this right</div>
-      </div>
+      
       <div class="cal-card" onclick="sendQ('Tell me about the Google Search Console notification for srinisaripalli.com')">
         <div class="cal-time">Mon Apr 13</div>
         <div class="cal-evt">Search Console · srinisaripalli.com</div>
@@ -481,7 +475,7 @@ DAILY SCHEDULE (NON-NEGOTIABLE):
 CONNECTED DATA (LIVE):
 Gmail account: srinisaripalli@gmail.com
 Current unread emails (as of Apr 15 2026):
-1. URGENT — "I need to make this right" from srini@srinisaripalli.com (his own send to list): Joel Bauer's Mentoring 4 Million Workshop order form was broken for 24+ hours during active promotion. Form is now fixed. Coupon LOCKEDOUT gives $97 price (down from $997). Event: April 25 & 26, San Jose, Joel Bauer, 60 seats, first public event in 6 years. This is the most urgent item today.
+1. HighLevel affiliate program emails — worth reviewing for potential revenue stream
 2. vidIQ — "How much YouTube actually pays at 1,000 subscribers" — relevant to podcast/YouTube strategy
 3. Otter.ai — feedback request
 4. Google Calendar — no events on Apr 14 (yesterday was clear)
@@ -517,7 +511,7 @@ let busy = false;
 
 // ── INIT MESSAGE ───────────────────────────────────
 window.addEventListener('load', () => {
-  addMsg('aria', `Good morning, Srini.\n\n**One urgent item needs your attention** — the Joel Bauer Mentoring 4 Million order form was down for 24+ hours during active promotion. You've already sent the LOCKEDOUT coupon email to your list. Tap the red banner above or ask me what to do next.\n\nYour calendar is **clear today** — deep work is fully protected until 1PM.\n\nGmail has 10+ unread. I've surfaced what matters. Stripe integration is pending — we'll set that up next.\n\nWhat do you want to tackle first?`);
+  addMsg('aria', `Good morning, Srini. Deep work is protected until 1PM. Calendar is clear. Gmail has 10+ unread. What do you want to tackle first?`);
 });
 
 // ── ADD MESSAGE ─────────────────────────────────────
@@ -642,3 +636,4 @@ function resize(el) {
 </script>
 </body>
 </html>
+
