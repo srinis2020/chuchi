@@ -603,13 +603,20 @@ async function send(txt) {
       })
     });
     const data = await r.json();
+    if (data.error) {
+      hideTyping();
+      addMsg('aria', 'API Error: ' + JSON.stringify(data.error));
+      busy = false;
+      document.getElementById('sbtn').disabled = false;
+      return;
+    }
     const reply = data.content?.[0]?.text || 'Something went wrong — try again.';
     hideTyping();
     addMsg('aria', reply);
     hist.push({role:'assistant', content: reply});
   } catch(e) {
     hideTyping();
-    addMsg('aria', 'Connection issue. Check your network and try again.');
+    addMsg('aria', 'Error: ' + e.message + ' — ' + (e.stack || 'no stack'));
   }
 
   busy = false;
