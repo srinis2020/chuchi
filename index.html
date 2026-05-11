@@ -349,7 +349,8 @@ if (sessionStorage.getItem('chuchi_auth') === '1') {
   <div class="chat-col">
 
     <!-- URGENT ALERT — Joel Bauer order form issue -->
-    <div class="alert-banner" onclick="sendQ('Tell me more about the Joel Bauer Mentoring 4 Million order form issue and what I should do next')">
+    <div class="alert-banner" id="alertBanner" style="position:relative;">
+  <button onclick="document.getElementById('alertBanner').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1;">✕</button>
       <div class="alert-icon">🚨</div>
       <div class="alert-content">
         <div class="alert-title">Action needed — Seminars · highstakescon.com</div>
@@ -515,7 +516,7 @@ SRINI'S VOICE (when drafting emails):
 - Never over-apologizes — acknowledges and moves forward
 - Signs off as "Srini Saripalli"
 
-CRITICAL: The Joel Bauer order form issue is the #1 priority today. Lead with it in any morning briefing.`;
+Be responsive to what Srini asks. Don't keep repeating the Joel Bauer issue unless he asks about it. Follow his lead in the conversation.`;
 
 // ── HISTORY ────────────────────────────────────────
 let hist = [];
@@ -592,9 +593,9 @@ async function send(txt) {
   showTyping();
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetch('/api/chat', {
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         model:'claude-sonnet-4-20250514',
         max_tokens:1000,
