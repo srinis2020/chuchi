@@ -341,21 +341,14 @@ if (sessionStorage.getItem('chuchi_auth') === '1') {
     <div class="nav-item" onclick="askUnit('Agency')"><span class="ni">🏢</span> Agency</div>
     <div class="nav-item" onclick="askUnit('Coaching')"><span class="ni">🎯</span> Coaching</div>
     <div class="nav-item" onclick="askUnit('Podcast')"><span class="ni">🎙️</span> Podcast</div>
-    <div class="nav-item" onclick="askUnit('Seminars')"><span class="ni">🎤</span> Seminars <span class="badge warn">!</span></div>
+    <div class="nav-item" onclick="askUnit('Seminars')"><span class="ni">🎤</span> Seminars</div>
     <div class="nav-item" onclick="askUnit('Speaking')"><span class="ni">🌍</span> Speaking</div>
   </div>
 
   <!-- CHAT COLUMN -->
   <div class="chat-col">
 
-    <!-- URGENT ALERT — Joel Bauer order form issue -->
-    <div class="alert-banner" id="alertBanner" style="position:relative;">
-  <button onclick="document.getElementById('alertBanner').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1;">✕</button>
-      <div class="alert-icon">🚨</div>
-      <div class="alert-content">
-        <div class="alert-title">Action needed — Seminars · highstakescon.com</div>
-        <div class="alert-body">Joel Bauer's Mentoring 4 Million order form was down 24+ hrs during active promotion. Form now fixed. LOCKEDOUT coupon at $97 issued. Tap to get Chuchi's full briefing and next steps.</div>
-      </div>
+    
     </div>
 
     <!-- BRIEFING TILES -->
@@ -377,8 +370,8 @@ if (sessionStorage.getItem('chuchi_auth') === '1') {
       </div>
       <div class="tile" onclick="sendQ('What needs my attention or a decision from me today across all business units?')">
         <div class="tile-label">⚡ Priority</div>
-        <div class="tile-val red">1 urgent</div>
-        <div class="tile-sub">Seminars flagged</div>
+        <div class="tile-val purple">Ask</div>
+        <div class="tile-sub">Tap to check</div>
       </div>
     </div>
 
