@@ -1,26 +1,46 @@
 // ============================================================
-// /api/chat — Chuchi's brain with memory (Hobby-tier safe)
-// ============================================================
-// Flow:
-//  1. Pull memories from Supabase + inject into system prompt
-//  2. In parallel: call Anthropic for main reply + Haiku for memory extraction
-//  3. Write extracted memories to Supabase
-//  4. Return response (with debug info)
+// /api/chat — Chuchi's brain with memory + auth
 // ============================================================
 
+import crypto from 'node:crypto';
+
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+
+function verifyAuth(req) {
+  const APP_SECRET = process.env.APP_SECRET;
+  if (!APP_SECRET) return false;
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const [payload, sig] = parts;
+  const expectedSig = crypto.createHmac('sha256', APP_SECRET).update(payload).digest('base64url');
+  try {
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // ─── AUTH GATE ────────────────────────────────────
+  if (!verifyAuth(req)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const API_KEY = process.env.ANTHROPIC_API_KEY;
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
   if (!API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY missing' });
 
   const body = req.body || {};
@@ -32,7 +52,6 @@ export default async function handler(req, res) {
   const debug = { memory_enabled: memoryEnabled };
 
   try {
-    // 1. Fetch memories
     let memoryBlock = '';
     if (memoryEnabled) {
       try {
@@ -44,11 +63,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const systemWithMemory = memoryBlock
-      ? `${originalSystem}\n\n${memoryBlock}`
-      : originalSystem;
+    const systemWithMemory = memoryBlock ? `${originalSystem}\n\n${memoryBlock}` : originalSystem;
 
-    // 2. Parallel: main reply + extraction
     const replyPromise = fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
@@ -65,9 +81,7 @@ export default async function handler(req, res) {
     });
 
     const extractPromise = memoryEnabled && latestUserMsg
-      ? extractAndSave(latestUserMsg, API_KEY, SUPABASE_URL, SUPABASE_KEY).catch(e => ({
-          error: e.message,
-        }))
+      ? extractAndSave(latestUserMsg, API_KEY, SUPABASE_URL, SUPABASE_KEY).catch(e => ({ error: e.message }))
       : Promise.resolve({ skipped: true });
 
     const [anthropicRes, extractResult] = await Promise.all([replyPromise, extractPromise]);
@@ -83,42 +97,20 @@ export default async function handler(req, res) {
 
 async function fetchMemories(query, SUPABASE_URL, SUPABASE_KEY) {
   const h = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
-
-  const pinnedP = fetch(
-    `${SUPABASE_URL}/rest/v1/memories?pinned=eq.true&select=*`,
-    { headers: h }
-  ).then(r => r.json()).catch(() => []);
-
-  const recentP = fetch(
-    `${SUPABASE_URL}/rest/v1/memories?select=*&order=created_at.desc&limit=30`,
-    { headers: h }
-  ).then(r => r.json()).catch(() => []);
-
+  const pinnedP = fetch(`${SUPABASE_URL}/rest/v1/memories?pinned=eq.true&select=*`, { headers: h }).then(r => r.json()).catch(() => []);
+  const recentP = fetch(`${SUPABASE_URL}/rest/v1/memories?select=*&order=created_at.desc&limit=30`, { headers: h }).then(r => r.json()).catch(() => []);
   let searchP = Promise.resolve([]);
   if (query && query.trim()) {
-    const terms = query
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 2)
-      .slice(0, 8)
-      .join(' | ');
+    const terms = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2).slice(0, 8).join(' | ');
     if (terms) {
-      searchP = fetch(
-        `${SUPABASE_URL}/rest/v1/memories?content=fts.${encodeURIComponent(terms)}&select=*&limit=15`,
-        { headers: h }
-      ).then(r => r.json()).catch(() => []);
+      searchP = fetch(`${SUPABASE_URL}/rest/v1/memories?content=fts.${encodeURIComponent(terms)}&select=*&limit=15`, { headers: h }).then(r => r.json()).catch(() => []);
     }
   }
-
   const [pinned, recent, searched] = await Promise.all([pinnedP, recentP, searchP]);
   const seen = new Set();
   const merged = [];
-  for (const m of [...(pinned || []), ...(searched || []), ...(recent || [])]) {
-    if (m && m.id && !seen.has(m.id)) {
-      seen.add(m.id);
-      merged.push(m);
-    }
+  for (const m of [...(pinned||[]), ...(searched||[]), ...(recent||[])]) {
+    if (m && m.id && !seen.has(m.id)) { seen.add(m.id); merged.push(m); }
   }
   return merged.slice(0, 50);
 }
@@ -131,13 +123,7 @@ function formatMemories(memories) {
     grouped[cat].push(m);
   }
   let block = '═══════════════════════════════════════════════\nYOUR MEMORY — Things you have learned and should treat as known facts:\n═══════════════════════════════════════════════\n\n';
-  const labels = {
-    person: 'PEOPLE',
-    business: 'BUSINESS FACTS',
-    preference: "SRINI'S PREFERENCES",
-    decision: 'PAST DECISIONS',
-    other: 'OTHER',
-  };
+  const labels = { person: 'PEOPLE', business: 'BUSINESS FACTS', preference: "SRINI'S PREFERENCES", decision: 'PAST DECISIONS', other: 'OTHER' };
   for (const cat of ['person', 'business', 'preference', 'decision', 'other']) {
     if (!grouped[cat] || grouped[cat].length === 0) continue;
     block += `── ${labels[cat]} ──\n`;
@@ -175,75 +161,41 @@ If nothing worth saving: {"auto_save":[],"confirm":[]}`;
 
   const r = await fetch(ANTHROPIC_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 800,
       messages: [{ role: 'user', content: extractionPrompt }],
     }),
   });
-
-  if (!r.ok) {
-    const errText = await r.text();
-    throw new Error(`Haiku ${r.status}: ${errText.slice(0, 200)}`);
-  }
-
+  if (!r.ok) throw new Error(`Haiku ${r.status}`);
   const data = await r.json();
   const text = data.content?.[0]?.text || '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { auto: 0, pending: 0, raw: text.slice(0, 100) };
+  if (!jsonMatch) return { auto: 0, pending: 0 };
 
   let extracted;
-  try {
-    extracted = JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    return { auto: 0, pending: 0, parse_error: e.message, raw: text.slice(0, 100) };
-  }
+  try { extracted = JSON.parse(jsonMatch[0]); }
+  catch (e) { return { auto: 0, pending: 0, parse_error: e.message }; }
 
-  const sbHeaders = {
-    'Content-Type': 'application/json',
-    apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`,
-  };
-
-  let autoCount = 0;
-  let pendingCount = 0;
-  const errors = [];
+  const sbHeaders = { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+  let autoCount = 0, pendingCount = 0;
 
   for (const m of extracted.auto_save || []) {
     if (!m.content) continue;
     const w = await fetch(`${SUPABASE_URL}/rest/v1/memories`, {
-      method: 'POST',
-      headers: sbHeaders,
-      body: JSON.stringify({
-        category: m.category || 'other',
-        content: m.content,
-        context: m.context || null,
-      }),
+      method: 'POST', headers: sbHeaders,
+      body: JSON.stringify({ category: m.category || 'other', content: m.content, context: m.context || null }),
     });
     if (w.ok) autoCount++;
-    else errors.push(`auto ${w.status}: ${(await w.text()).slice(0, 150)}`);
   }
-
   for (const m of extracted.confirm || []) {
     if (!m.content) continue;
     const w = await fetch(`${SUPABASE_URL}/rest/v1/pending_memories`, {
-      method: 'POST',
-      headers: sbHeaders,
-      body: JSON.stringify({
-        category: m.category || 'other',
-        content: m.content,
-        context: m.context || null,
-        reason: m.reason || null,
-      }),
+      method: 'POST', headers: sbHeaders,
+      body: JSON.stringify({ category: m.category || 'other', content: m.content, context: m.context || null, reason: m.reason || null }),
     });
     if (w.ok) pendingCount++;
-    else errors.push(`pending ${w.status}: ${(await w.text()).slice(0, 150)}`);
   }
-
-  return { auto: autoCount, pending: pendingCount, errors: errors.length ? errors : undefined };
+  return { auto: autoCount, pending: pendingCount };
 }
