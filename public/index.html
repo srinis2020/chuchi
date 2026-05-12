@@ -49,18 +49,24 @@ body::before {
 }
 .aria-brand { display:flex; align-items:center; gap:12px; }
 .aria-orb {
-  width:34px; height:34px; border-radius:50%;
-  background: conic-gradient(from 0deg, var(--accent2), var(--accent), var(--accent2));
+  width:38px; height:38px; border-radius:50%;
+  background: var(--bg);
   display:flex; align-items:center; justify-content:center;
-  animation: orbSpin 6s linear infinite;
   position:relative;
+  overflow:hidden;
+  border:1.5px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(200,169,110,0.2), 0 0 14px rgba(200,169,110,0.25);
 }
 .aria-orb::after {
-  content:''; position:absolute; inset:-3px; border-radius:50%;
-  background: conic-gradient(from 0deg, var(--accent2), var(--accent));
-  opacity:0.25; filter:blur(7px); animation: orbSpin 6s linear infinite reverse;
+  content:''; position:absolute; inset:-4px; border-radius:50%;
+  background: conic-gradient(from 0deg, var(--accent2), var(--accent), var(--accent2));
+  opacity:0.18; filter:blur(8px); animation: orbSpin 12s linear infinite; z-index:0;
 }
-.aria-orb-inner { width:16px; height:16px; border-radius:50%; background:var(--bg); z-index:1; }
+.aria-orb img {
+  width:100%; height:100%; object-fit:cover; border-radius:50%;
+  position:relative; z-index:1;
+}
+.aria-orb-inner { display:none; }
 @keyframes orbSpin { to { transform: rotate(360deg); } }
 .aria-name { font-family:'DM Serif Display',serif; font-size:20px; color:var(--text); }
 .aria-name span { color:var(--accent); }
@@ -188,8 +194,15 @@ body::before {
 .avatar {
   width:30px; height:30px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500;
+  overflow:hidden;
 }
-.avatar.a { background:conic-gradient(from 0deg,var(--accent2),var(--accent)); color:var(--bg); font-family:'DM Serif Display',serif; font-size:13px; }
+.avatar.a {
+  background:var(--bg);
+  border:1px solid rgba(200,169,110,0.4);
+  color:var(--bg);
+  font-family:'DM Serif Display',serif; font-size:13px;
+}
+.avatar.a img { width:100%; height:100%; object-fit:cover; }
 .avatar.u { background:var(--surface2); border:1px solid var(--border); color:var(--muted); }
 .bubble-wrap {}
 .bubble {
@@ -286,7 +299,7 @@ textarea::placeholder { color:var(--muted); }
 
 <div class="header">
   <div class="aria-brand">
-    <div class="aria-orb"><div class="aria-orb-inner"></div></div>
+    <div class="aria-orb"><img src="/chuchi.png" alt="Chuchi"></div>
     <div>
       <div class="aria-name">Chu<span>chi</span></div>
       <div class="aria-sub">Personal Assistant · Second Mind</div>
@@ -592,7 +605,11 @@ function addMsg(role, text) {
 
   const av = document.createElement('div');
   av.className = `avatar ${role === 'aria' ? 'a' : 'u'}`;
-  av.textContent = role === 'aria' ? 'A' : 'S';
+  if (role === 'aria') {
+    av.innerHTML = '<img src="/chuchi.png" alt="Chuchi">';
+  } else {
+    av.textContent = 'S';
+  }
 
   const bw = document.createElement('div');
   bw.className = 'bubble-wrap';
@@ -625,7 +642,8 @@ function showTyping() {
   const d = document.createElement('div');
   d.className = 'message aria'; d.id = 'typ';
   const av = document.createElement('div');
-  av.className = 'avatar a'; av.textContent = 'A';
+  av.className = 'avatar a';
+  av.innerHTML = '<img src="/chuchi.png" alt="Chuchi">';
   const b = document.createElement('div');
   b.className = 'bubble';
   b.innerHTML = '<div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>';
@@ -699,3 +717,4 @@ function resize(el) {
 </script>
 </body>
 </html>
+
