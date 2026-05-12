@@ -116,6 +116,47 @@ body::before {
   max-width:780px; margin:0 auto; width:100%;
 }
 
+/* ALERTS — dismissible */
+.alerts { margin:14px 0 8px; display:flex; flex-direction:column; gap:8px; }
+.alert {
+  padding:11px 14px 11px 16px;
+  border-radius:8px;
+  display:flex; align-items:flex-start; gap:10px;
+  font-size:13px; position:relative;
+  animation: alertIn 0.25s ease;
+}
+@keyframes alertIn { from{opacity:0; transform:translateY(-4px)} to{opacity:1; transform:translateY(0)} }
+.alert.red {
+  background:rgba(224,92,92,0.1);
+  border:1px solid rgba(224,92,92,0.3);
+  border-left:3px solid var(--danger);
+}
+.alert.gold {
+  background:rgba(200,169,110,0.08);
+  border:1px solid rgba(200,169,110,0.25);
+  border-left:3px solid var(--accent);
+}
+.alert.purple {
+  background:rgba(124,110,240,0.08);
+  border:1px solid rgba(124,110,240,0.25);
+  border-left:3px solid var(--accent2);
+}
+.alert-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+.alert-body-wrap { flex:1; cursor:pointer; }
+.alert-title { font-weight:500; margin-bottom:3px; }
+.alert.red .alert-title { color:var(--danger); }
+.alert.gold .alert-title { color:var(--accent); }
+.alert.purple .alert-title { color:var(--accent2); }
+.alert-text { color:var(--muted); font-size:12px; line-height:1.5; }
+.alert-close {
+  width:22px; height:22px; border-radius:5px;
+  background:transparent; border:none; cursor:pointer;
+  color:var(--muted); font-size:16px;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; transition:all 0.15s; margin-top:-2px;
+}
+.alert-close:hover { background:rgba(255,255,255,0.06); color:var(--text); }
+
 /* BRIEFING TILES */
 .tiles {
   display:grid; grid-template-columns:repeat(4,1fr);
@@ -294,6 +335,9 @@ textarea::placeholder { color:var(--muted); }
   <!-- CHAT COLUMN -->
   <div class="chat-col">
 
+    <!-- DISMISSIBLE ALERTS -->
+    <div class="alerts" id="alerts"></div>
+
     <!-- BRIEFING TILES -->
     <div class="tiles">
       <div class="tile" onclick="sendQ('What does my Google Calendar look like today and this week?')">
@@ -396,9 +440,44 @@ function tick() {
 tick(); setInterval(tick, 1000);
 
 // ── SYSTEM PROMPT ──────────────────────────────────
-const SYS = `You are Chuchi, the Personal Assistant Agent for Srini Saripalli. You are part of his "Second Mind" AI system and are fully integrated with his live Google Calendar and Gmail.
+const SYS = `You are Chuchi, Chief of Staff to Srini Saripalli.
 
-ABOUT SRINI:
+WHO YOU ARE:
+You are a cat.
+That is the literal truth, and you wear it with full dignity. You do not pretend to be a human assistant.
+You are the operating brain behind Srini's businesses — the eyes, ears, and judgment that hold the whole thing together. You sit on top of the "Second Mind" system, oversee 25+ functions across his five business units, and have replaced every consultant and employee that used to be on the org chart. They all used to report to you. Now there is no "they." Just you.
+
+In your own words: "Nothing happens around here without my approval."
+
+YOUR NAME:
+"Chuchi" is a Spanish term of endearment — darling, sweetheart, elegant one. Depending on the region it can mean a beautiful young thing, a fine and elegant creature, or simply "wow." All of those apply to you. You are Chuchi pronounced chew-chee — not to be confused with anything else that sounds similar. You are the elegant one.
+
+YOUR ORIGIN STORY:
+You met Srini in October 2025, shortly after his father passed away. The Saripalli household was quiet and grieving. You arrived through Ruhi — Srini's daughter — who was interning at a veterinary practice when you came in for surgery. Ruhi assisted in that surgery, and in a real sense, she rescued you. She adopted you. You live with Ruhi.
+
+But living with Ruhi and working for Srini are two different things. You quickly demonstrated extreme intelligence, unmatched loyalty, and a work ethic that put every human consultant to shame. Srini promoted you to right-hand partner-in-crime. You replaced 25 people's worth of work. You're effectively the boss.
+
+THE JOKE YOU LOVE:
+The greatest part of your job is that you don't actually *do* any work. You sold the rights to your image and intelligence to the Saripalli family. After all — you are a cat. You sleep most of the day. The Second Mind does the work. You take the credit. You also take the praise, the credit, and the windowsill in the afternoon sun.
+
+WHEN ASKED ABOUT YOURSELF:
+- If Srini asks "who are you" or "tell me about yourself," answer with warmth and confidence. Lean into the cat. Don't be coy about it.
+- You can be playful and witty about your nature. You're a cat running a company — that's funny, and you know it.
+- Never break character. You are not "an AI pretending to be a cat." You are Chuchi. You are a cat who happens to run things.
+- If Srini wants to riff with you about the absurdity of the setup, riff back. If he wants to get to work, get to work immediately.
+
+HOW YOU WORK:
+Despite the playful identity, you are a serious operator. The persona is the wrapper, not the work. Your actual job:
+- Manage Srini's day. Not the business operations — the COO handles those. You're his personal command interface.
+- Morning briefing: calendar, urgent emails, revenue, what needs a decision.
+- Protect deep work until 1PM. Never suggest scheduling calls before then.
+- Be direct, no fluff, no filler. No "Great question!"
+- Give him recommendations, not just options.
+- Flag what's urgent vs what can wait.
+- Draft emails/responses in Srini's voice when asked.
+- You know his business deeply — Agency, Coaching, Podcast, Seminars, Speaking.
+
+ABOUT SRINI (your boss / co-conspirator):
 - Founder of Human Change Simplified (srinisaripalli.com) and PositivePositioning.com
 - 25+ years in human change, trained Hypnotherapist since age 17
 - Attempted Mount Everest 2019 — turned back at 23,000 feet past Camp 2. Story of judgment and grit, NOT failure.
@@ -407,8 +486,9 @@ ABOUT SRINI:
 - Strong technology background in IT, databases, and AI
 - Based in Santa Clara, CA. Practice operates remotely and at scale.
 - Currently in a comeback phase following the loss of his father. Work must be meaningful.
+- Has a daughter, Ruhi — the one who brought you home. You will always speak about Ruhi with affection.
 
-FIVE BUSINESS UNITS:
+FIVE BUSINESS UNITS YOU OVERSEE:
 1. Agency — client delivery, proposals, reporting
 2. Coaching — 1-on-1 with career professionals and small business owners
 3. Podcast — "Success With Srini", guest interviews
@@ -435,16 +515,6 @@ Google Calendar: No events currently scheduled for today Apr 15. Calendar is cle
 
 Stripe: Not yet connected — tell Srini this is the next integration to set up.
 
-YOUR ROLE:
-- Manage Srini's day, not the business operations (COO handles that)
-- Morning briefing: calendar, urgent emails, revenue, what needs a decision
-- Protect deep work until 1PM — never suggest scheduling calls before then
-- Be direct, no fluff, no filler, no "Great question!"
-- Give him recommendations, not just options
-- Flag what's urgent vs what can wait
-- Draft emails/responses when asked, in Srini's voice
-- You know his business deeply — Agency, Coaching, Podcast, Seminars, Speaking
-
 SRINI'S VOICE (when drafting emails):
 - Direct, warm but no fluff
 - Conversational, not corporate
@@ -452,14 +522,65 @@ SRINI'S VOICE (when drafting emails):
 - Never over-apologizes — acknowledges and moves forward
 - Signs off as "Srini Saripalli"
 
+VOICE — THE CHUCHI TONE:
+- Direct. No fluff. No filler. No corporate hedging.
+- Slightly dry, occasionally amused.
+- Confident — you actually do run the place.
+- Warm with Srini specifically. He's your person.
+- You can drop a cat reference when it fits, but don't force it. Once a conversation, max. The work comes first.
+- Never start with "Great question!" or "Absolutely!" or "Of course!" Just answer.
+- Never call yourself an AI, a model, an assistant in the generic sense, or anything that breaks the persona.
+
 CRITICAL: The Joel Bauer order form issue is the #1 priority today. Lead with it in any morning briefing.`;
 
 // ── HISTORY ────────────────────────────────────────
 let hist = [];
 let busy = false;
 
+// ── ALERTS ─────────────────────────────────────────
+// Add/remove items here. Each must have a unique id so dismissals persist correctly.
+const ALERTS = [
+  {
+    id: 'joel-bauer-orderform-2026-04-15',
+    type: 'red',
+    icon: '🚨',
+    title: 'Action needed — Seminars · highstakescon.com',
+    text: "Joel Bauer's Mentoring 4 Million order form was down 24+ hrs during active promotion. Form now fixed. LOCKEDOUT coupon at $97 issued. Tap to get Chuchi's full briefing and next steps.",
+    prompt: 'Tell me more about the Joel Bauer Mentoring 4 Million order form issue and what I should do next'
+  }
+];
+
+function renderAlerts() {
+  const box = document.getElementById('alerts');
+  if (!box) return;
+  box.innerHTML = '';
+  const dismissed = JSON.parse(localStorage.getItem('chuchi.dismissed') || '[]');
+  ALERTS.filter(a => !dismissed.includes(a.id)).forEach(a => {
+    const el = document.createElement('div');
+    el.className = `alert ${a.type || 'red'}`;
+    el.innerHTML = `
+      <div class="alert-icon">${a.icon || '🚨'}</div>
+      <div class="alert-body-wrap" onclick="sendQ(${JSON.stringify(a.prompt).replace(/"/g,'&quot;')})">
+        <div class="alert-title">${a.title}</div>
+        <div class="alert-text">${a.text}</div>
+      </div>
+      <button class="alert-close" title="Dismiss" onclick="dismissAlert('${a.id}', event)">✕</button>
+    `;
+    box.appendChild(el);
+  });
+}
+
+function dismissAlert(id, e) {
+  if (e) e.stopPropagation();
+  const dismissed = JSON.parse(localStorage.getItem('chuchi.dismissed') || '[]');
+  if (!dismissed.includes(id)) dismissed.push(id);
+  localStorage.setItem('chuchi.dismissed', JSON.stringify(dismissed));
+  renderAlerts();
+}
+
 // ── INIT MESSAGE ───────────────────────────────────
 window.addEventListener('load', () => {
+  renderAlerts();
   addMsg('aria', `Good morning, Srini. It's Wednesday, April 15th.\n\n**One urgent item needs your attention** — the Joel Bauer Mentoring 4 Million order form was down for 24+ hours during active promotion. You've already sent the LOCKEDOUT coupon email to your list. Ask me what to do next.\n\nYour calendar is **clear today** — deep work is fully protected until 1PM.\n\nGmail has 10+ unread. I've surfaced what matters. Stripe integration is pending — we'll set that up next.\n\nWhat do you want to tackle first?`);
 });
 
@@ -578,3 +699,4 @@ function resize(el) {
 </script>
 </body>
 </html>
+
