@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chuchi — Sign in</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #faf8f4;
+  --surface:   #ffffff;
+  --surface-2: #f3efe8;
+  --border:    #e8e2d6;
+  --border-strong: #d8d0c0;
+  --ink:       #1a1814;
+  --text:      #2c2822;
+  --muted:     #7a7368;
+  --faint:     #a8a195;
+  --accent:        #b85c3c;
+  --accent-strong: #9c4729;
+  --accent-soft:   #f0d8cc;
+  --accent-bg:     #faeae0;
+  --danger:  #c44a3f;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+body::before {
+  content:''; position:fixed; top:-300px; left:-300px;
+  width:800px; height:800px;
+  background: radial-gradient(circle, rgba(184,92,60,0.06) 0%, transparent 70%);
+  pointer-events:none; z-index:0;
+}
+body::after {
+  content:''; position:fixed; bottom:-300px; right:-300px;
+  width:700px; height:700px;
+  background: radial-gradient(circle, rgba(198,138,63,0.05) 0%, transparent 70%);
+  pointer-events:none; z-index:0;
+}
+
+.wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  max-width: 460px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 40px 36px;
+  box-shadow: 0 20px 60px rgba(26,24,20,0.06), 0 4px 12px rgba(26,24,20,0.03);
+  position: relative;
+}
+
+.orb-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.orb {
+  width: 88px; height: 88px; border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--accent-soft);
+  box-shadow: 0 0 0 1px rgba(184,92,60,0.15), 0 8px 24px rgba(184,92,60,0.18);
+}
+.orb svg { display: block; width: 100%; height: 100%; }
+
+.brand-name {
+  text-align: center;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 36px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.brand-name em {
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+
+.brand-sub {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 28px;
+}
+
+.intro {
+  text-align: center;
+  color: var(--text);
+  font-size: 14.5px;
+  line-height: 1.65;
+  margin-bottom: 28px;
+  padding: 0 6px;
+}
+.intro em {
+  font-family: 'Fraunces', Georgia, serif;
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.password-input {
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.2s;
+}
+.password-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.password-input::placeholder { color: var(--faint); }
+
+.signin-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 4px;
+}
+.signin-btn:hover:not(:disabled) {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(184,92,60,0.25);
+}
+.signin-btn:disabled {
+  background: var(--border-strong);
+  cursor: not-allowed;
+}
+
+.error {
+  background: rgba(196,74,63,0.08);
+  border: 1px solid rgba(196,74,63,0.25);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 14px;
+  display: none;
+  animation: shake 0.4s ease;
+}
+.error.show { display: block; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.footer-note {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 12px;
+  color: var(--faint);
+  font-style: italic;
+  font-family: 'Fraunces', serif;
+}
+
+@media (max-width: 480px) {
+  .card { padding: 32px 24px; }
+  .brand-name { font-size: 30px; }
+  .orb { width: 76px; height: 76px; }
+  .intro { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="card">
+
+    <div class="orb-wrap">
+      <div class="orb" id="orb"></div>
+    </div>
+
+    <div class="brand-name">Chu<em>chi</em></div>
+    <div class="brand-sub">Second Mind HQ</div>
+
+    <div class="intro">
+      Nothing happens around here without my approval. So before you come in — <em>let's see who you are</em>.
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <form id="form" autocomplete="off">
+      <div class="form-group">
+        <input
+          type="password"
+          id="password"
+          class="password-input"
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus>
+      </div>
+      <button type="submit" class="signin-btn" id="signin">Sign in</button>
+    </form>
+
+    <div class="footer-note">— Chuchi, Chief of Staff</div>
+
+  </div>
+</div>
+
+<script>
+const CHUCHI_LOGO = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-label="Chuchi">
+  <defs>
+    <radialGradient id="chuchi-grad" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#fbedd1"/>
+      <stop offset="55%" stop-color="#d4a574"/>
+      <stop offset="100%" stop-color="#8b5a2b"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="49" fill="url(#chuchi-grad)"/>
+  <g fill="#1a1814">
+    <path d="M 30 58 Q 26 70 28 82 L 72 82 Q 74 70 70 58 Q 70 50 65 46 Q 62 44 60 44 L 40 44 Q 38 44 35 46 Q 30 50 30 58 Z"/>
+    <ellipse cx="50" cy="42" rx="18" ry="17"/>
+    <path d="M 34 30 L 30 14 L 42 26 Z"/>
+    <path d="M 66 30 L 70 14 L 58 26 Z"/>
+    <ellipse cx="40" cy="79" rx="3.5" ry="5"/>
+    <ellipse cx="60" cy="79" rx="3.5" ry="5"/>
+  </g>
+  <path d="M 35 27 L 33 19 L 39 25 Z" fill="#5a3a2a" opacity="0.8"/>
+  <path d="M 65 27 L 67 19 L 61 25 Z" fill="#5a3a2a" opacity="0.8"/>
+  <ellipse cx="42" cy="42" rx="3" ry="3.8" fill="#f0c862"/>
+  <ellipse cx="42" cy="42.5" rx="1.5" ry="3.2" fill="#1a1814"/>
+  <circle cx="42.5" cy="40.5" r="0.6" fill="#fff" opacity="0.8"/>
+  <ellipse cx="58" cy="42" rx="3" ry="3.8" fill="#f0c862"/>
+  <ellipse cx="58" cy="42.5" rx="1.5" ry="3.2" fill="#1a1814"/>
+  <circle cx="58.5" cy="40.5" r="0.6" fill="#fff" opacity="0.8"/>
+  <path d="M 48.5 48 L 51.5 48 L 50 50 Z" fill="#5a3a2a"/>
+  <path d="M 50 50 L 50 52 M 50 52 Q 48 53.5 46.5 53 M 50 52 Q 52 53.5 53.5 53" stroke="#5a3a2a" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <g stroke="#3a3530" stroke-width="0.4" stroke-linecap="round" opacity="0.5">
+    <line x1="38" y1="50" x2="30" y2="49"/>
+    <line x1="38" y1="51.5" x2="30" y2="52"/>
+    <line x1="62" y1="50" x2="70" y2="49"/>
+    <line x1="62" y1="51.5" x2="70" y2="52"/>
+  </g>
+  <path d="M 38 60 Q 50 64 62 60 L 62 62 Q 50 66 38 62 Z" fill="#b85c3c"/>
+  <circle cx="50" cy="63.5" r="1.8" fill="#f0c862" stroke="#9c4729" stroke-width="0.4"/>
+</svg>`;
+
+document.getElementById('orb').innerHTML = CHUCHI_LOGO;
+
+// If already authed, go straight to chat
+if (localStorage.getItem('chuchi.token')) {
+  window.location.replace('/');
+}
+
+const form = document.getElementById('form');
+const passInput = document.getElementById('password');
+const errorBox = document.getElementById('error');
+const signinBtn = document.getElementById('signin');
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.add('show');
+  // Restart shake animation
+  errorBox.style.animation = 'none';
+  errorBox.offsetHeight; // force reflow
+  errorBox.style.animation = '';
+}
+
+function clearError() {
+  errorBox.classList.remove('show');
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const password = passInput.value;
+  if (!password) {
+    showError('Enter the password');
+    return;
+  }
+  clearError();
+  signinBtn.disabled = true;
+  signinBtn.textContent = 'Checking…';
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json();
+    if (res.ok && data.token) {
+      localStorage.setItem('chuchi.token', data.token);
+      signinBtn.textContent = 'Welcome';
+      // Small delay so the button state feels intentional
+      setTimeout(() => window.location.replace('/'), 250);
+    } else {
+      showError(data.error || 'That is not the password.');
+      signinBtn.disabled = false;
+      signinBtn.textContent = 'Sign in';
+      passInput.select();
+    }
+  } catch (e) {
+    showError('Could not reach the server. Try again.');
+    signinBtn.disabled = false;
+    signinBtn.textContent = 'Sign in';
+  }
+});
+
+passInput.addEventListener('input', clearError);
+</script>
+
+</body>
+</html>

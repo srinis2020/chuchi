@@ -377,6 +377,11 @@ body::before {
 <div class="toast-stack" id="toasts"></div>
 
 <script>
+// ─── AUTH GATE ─────────────────────────────────────
+if (!localStorage.getItem('chuchi.token')) {
+  window.location.replace('/login.html');
+}
+
 const CHUCHI_LOGO = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-label="Chuchi">\n  <defs>\n    <radialGradient id="chuchi-grad" cx="50%" cy="38%" r="65%">\n      <stop offset="0%" stop-color="#fbedd1"/>\n      <stop offset="55%" stop-color="#d4a574"/>\n      <stop offset="100%" stop-color="#8b5a2b"/>\n    </radialGradient>\n  </defs>\n  <circle cx="50" cy="50" r="49" fill="url(#chuchi-grad)"/>\n  <g fill="#1a1814">\n    <path d="M 30 58 Q 26 70 28 82 L 72 82 Q 74 70 70 58 Q 70 50 65 46 Q 62 44 60 44 L 40 44 Q 38 44 35 46 Q 30 50 30 58 Z"/>\n    <ellipse cx="50" cy="42" rx="18" ry="17"/>\n    <path d="M 34 30 L 30 14 L 42 26 Z"/>\n    <path d="M 66 30 L 70 14 L 58 26 Z"/>\n    <ellipse cx="40" cy="79" rx="3.5" ry="5"/>\n    <ellipse cx="60" cy="79" rx="3.5" ry="5"/>\n  </g>\n  <path d="M 35 27 L 33 19 L 39 25 Z" fill="#5a3a2a" opacity="0.8"/>\n  <path d="M 65 27 L 67 19 L 61 25 Z" fill="#5a3a2a" opacity="0.8"/>\n  <ellipse cx="42" cy="42" rx="3" ry="3.8" fill="#f0c862"/>\n  <ellipse cx="42" cy="42.5" rx="1.5" ry="3.2" fill="#1a1814"/>\n  <circle cx="42.5" cy="40.5" r="0.6" fill="#fff" opacity="0.8"/>\n  <ellipse cx="58" cy="42" rx="3" ry="3.8" fill="#f0c862"/>\n  <ellipse cx="58" cy="42.5" rx="1.5" ry="3.2" fill="#1a1814"/>\n  <circle cx="58.5" cy="40.5" r="0.6" fill="#fff" opacity="0.8"/>\n  <path d="M 48.5 48 L 51.5 48 L 50 50 Z" fill="#5a3a2a"/>\n  <path d="M 50 50 L 50 52 M 50 52 Q 48 53.5 46.5 53 M 50 52 Q 52 53.5 53.5 53" stroke="#5a3a2a" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.7"/>\n  <g stroke="#3a3530" stroke-width="0.4" stroke-linecap="round" opacity="0.5">\n    <line x1="38" y1="50" x2="30" y2="49"/>\n    <line x1="38" y1="51.5" x2="30" y2="52"/>\n    <line x1="62" y1="50" x2="70" y2="49"/>\n    <line x1="62" y1="51.5" x2="70" y2="52"/>\n  </g>\n  <path d="M 38 60 Q 50 64 62 60 L 62 62 Q 50 66 38 62 Z" fill="#b85c3c"/>\n  <circle cx="50" cy="63.5" r="1.8" fill="#f0c862" stroke="#9c4729" stroke-width="0.4"/>\n</svg>';
 
 let state = { memories: [], pending: [], currentTab: 'all', searchTerm: '' };
@@ -396,8 +401,18 @@ async function api(action, payload = {}) {
   const method = action === 'list' ? 'GET' : 'POST';
   const body = method === 'POST' ? JSON.stringify({ action, ...payload }) : null;
   const res = await fetch('/api/memory-list', {
-    method, headers: { 'Content-Type': 'application/json' }, body,
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (localStorage.getItem('chuchi.token') || ''),
+    },
+    body,
   });
+  if (res.status === 401) {
+    localStorage.removeItem('chuchi.token');
+    window.location.replace('/login.html');
+    return {};
+  }
   return res.json();
 }
 
@@ -603,9 +618,17 @@ async function saveNewMemory() {
   try {
     const res = await fetch('/api/memory-save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (localStorage.getItem('chuchi.token') || ''),
+      },
       body: JSON.stringify({ category, content, context: context || null }),
     });
+    if (res.status === 401) {
+      localStorage.removeItem('chuchi.token');
+      window.location.replace('/login.html');
+      return;
+    }
     const data = await res.json();
     if (data.saved) {
       state.memories.unshift(data.saved);
