@@ -32,6 +32,19 @@ async function sendWhatsAppReply(to, body) {
   const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
   const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM;
 
+  // TEMP DIAGNOSTIC — confirms exactly what Vercel sees, without leaking secrets
+  log('TWILIO_CREDS', {
+    sid_first6: (TWILIO_ACCOUNT_SID || '').slice(0, 6),
+    sid_last4: (TWILIO_ACCOUNT_SID || '').slice(-4),
+    sid_length: (TWILIO_ACCOUNT_SID || '').length,
+    sid_starts_with_AC: (TWILIO_ACCOUNT_SID || '').startsWith('AC'),
+    token_length: (TWILIO_AUTH_TOKEN || '').length,
+    token_first2: (TWILIO_AUTH_TOKEN || '').slice(0, 2),
+    token_last2: (TWILIO_AUTH_TOKEN || '').slice(-2),
+    token_has_whitespace: /\s/.test(TWILIO_AUTH_TOKEN || ''),
+    from: TWILIO_WHATSAPP_FROM,
+  });
+
   log('SEND', `from=${TWILIO_WHATSAPP_FROM} to=${to} bodyLen=${body.length}`);
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
