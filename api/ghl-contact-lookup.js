@@ -56,12 +56,13 @@ async function searchContacts(query) {
   const isEmail = /@/.test(query);
 
   // v2 contact search endpoint
+  // Field names per GHL v2: contactName, firstNameLowerCase, lastNameLowerCase, email, phone
   const body = {
     locationId,
     pageLimit: 10,
     filters: [
       {
-        field: isEmail ? "email" : "name",
+        field: isEmail ? "email" : "contactName",
         operator: isEmail ? "eq" : "contains",
         value: query,
       },
