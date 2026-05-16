@@ -18,9 +18,9 @@ function log(label, data) {
 
 // Self-call helpers so this agent can use sibling routes as tools
 function baseUrl(req) {
-  // On Vercel, VERCEL_URL is set automatically
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  // Fallback: derive from request
+  // Prefer explicit stable production URL (not subject to Vercel Deployment Protection)
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
+  // Fallback: derive from request (uses the host Telegram called)
   const host = req.headers.host;
   const proto = req.headers['x-forwarded-proto'] || 'https';
   return `${proto}://${host}`;

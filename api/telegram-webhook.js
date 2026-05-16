@@ -66,7 +66,8 @@ function detectCrmIntent(text) {
 // ============================================================
 
 function baseUrl(req) {
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  // Prefer explicit stable production URL (not subject to Vercel Deployment Protection)
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
   const host = req.headers.host;
   const proto = req.headers['x-forwarded-proto'] || 'https';
   return `${proto}://${host}`;
