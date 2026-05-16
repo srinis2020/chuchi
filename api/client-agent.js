@@ -2,6 +2,7 @@
 // /api/client-agent
 // Second Mind: Client Agent.
 // Takes a contact query, fans out to GHL + Calendar in parallel,
+// merges duplicate CRM records for the same person,
 // returns a 5-line briefing.
 //
 // Read-only. No writes. No side effects.
@@ -16,11 +17,8 @@ function log(label, data) {
   console.log(`[CLIENT_AGENT] ${label}:`, typeof data === 'object' ? JSON.stringify(data) : data);
 }
 
-// Self-call helpers so this agent can use sibling routes as tools
 function baseUrl(req) {
-  // Prefer explicit stable production URL (not subject to Vercel Deployment Protection)
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
-  // Fallback: derive from request (uses the host Telegram called)
   const host = req.headers.host;
   const proto = req.headers['x-forwarded-proto'] || 'https';
   return `${proto}://${host}`;
@@ -54,20 +52,21 @@ const BRIEFING_SYSTEM_PROMPT = `You are the Client Agent inside Srini Saripalli'
 
 OUTPUT FORMAT — produce EXACTLY this structure, no more, no less:
 
-**Who:** [Name], [role/company if known], [source if known], entered [date].
-**Status:** [Lifecycle tag(s) — pick max 2 most signal-rich], [deal stage if any], [deal value if any].
-**Last touch:** [Most recent meaningful interaction — date + one-line summary].
+**Who:** [Name], [role/company if known], [source if known], entered [date]. If duplicate records exist for the same person, append "(merged from N CRM records)".
+**Status:** [Lifecycle tag(s) — pick max 2 most signal-rich and human-readable], [deal stage if any], [deal value if any].
+**Last touch:** [Most recent meaningful interaction — date + plain-English description].
 **Open loop:** [What's pending: your reply owed / their reply owed / scheduled / nothing active].
-**Signal:** [One line of judgment — e.g. "warm and waiting," "cold, no response in 60 days," "long-term audience, never converted," "hot, deal closing this week"].
+**Signal:** [One line of judgment synthesizing the whole picture].
 
-RULES:
-- Be DIRECT. No fluff. No filler. No "based on the data" preamble.
-- If a field is empty in source data, say "none" or "unknown" — don't fabricate.
-- If there are duplicate CRM records for the same person, flag it on the **Who** line: "(N duplicate records in CRM)".
-- Tags often contain dates and event names — pick the 2 most recent/signal-rich, ignore noise like "imported" or "openedonghl".
-- For **Signal**, synthesize across all data. This is the line Srini reads first.
+CRITICAL RULES:
+- Be DIRECT. No fluff. No preamble. No "based on the data."
+- If a field's meaning is unclear (e.g. cryptic strings like "Abndt", "PPMC", short codes), OMIT it. Never guess. Never include raw data you can't interpret.
+- Never expose internal data shapes to the user. No "type 3", no GHL field codes, no raw enum values. Translate everything into plain English or omit it.
+- For tags: pick max 2 that carry real signal (e.g. "mentoring4millions-paid-attendee" → "Paid M4M attendee"). Skip noise tags: imported, openedonghl, no engagement, single-word tags you can't decode, anything that looks like a date string or filename.
+- For **Signal**: this is the line Srini reads first. It must synthesize across all data — engagement pattern, recency, conversion status, lifecycle. NOT a restatement of other fields.
+- If a field has nothing meaningful, write "none" or "unknown" — don't pad.
 - Do NOT use headers, intros, or closing remarks. Just the 5 lines.
-- Markdown bold on field labels only. No other formatting.`;
+- Markdown bold on field labels only.`;
 
 // ============================================================
 // Main handler
@@ -89,7 +88,6 @@ export default async function handler(req, res) {
 
     log('REQUEST', { query, contactId });
 
-    // ── Step 1: GHL lookup ────────────────────────────
     const ghl = await callGhlLookup(req, { query, contactId, includeMessages: true });
     log('GHL_STATUS', ghl.status);
 
@@ -97,20 +95,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: `GHL lookup failed: ${ghl.error}` });
     }
 
-    // Handle disambiguation — bubble up to caller (Chuchi/Telegram)
-    if (ghl.status === 'multiple_matches') {
-      log('DISAMBIG', `${ghl.matches.length} matches`);
-      return res.status(200).json({
-        status: 'multiple_matches',
-        query,
-        matches: ghl.matches,
-        // Pre-formatted text for Telegram display
-        prompt: formatDisambigPrompt(ghl.matches),
-      });
-    }
-
     if (ghl.status === 'no_match') {
-      log('NO_MATCH', query);
       return res.status(200).json({
         status: 'no_match',
         query,
@@ -118,37 +103,99 @@ export default async function handler(req, res) {
       });
     }
 
-    // ── Step 2: Calendar search in parallel ───────────
-    // Only attempt calendar if explicitly enabled. Skip silently when not configured.
-    const contactEmail = ghl.contact?.email;
-    const contactName = ghl.contact?.name;
+    let mergedContact = null;
+    let mergedSources = [];
+    let duplicateCount = 0;
+
+    if (ghl.status === 'multiple_matches') {
+      const groups = groupBySameHuman(ghl.matches);
+      log('MATCH_GROUPS', `${groups.length} distinct humans across ${ghl.matches.length} records`);
+
+      if (groups.length === 1) {
+        mergedSources = groups[0].map(m => m.id);
+        mergedContact = mergeContacts(groups[0]);
+        duplicateCount = groups[0].length;
+        log('MERGED', `${duplicateCount} duplicate records`);
+      } else {
+        const reps = groups.map(group => ({
+          ...mergeContacts(group),
+          _duplicateCount: group.length,
+        }));
+        log('DISAMBIG', `${reps.length} distinct people`);
+        return res.status(200).json({
+          status: 'multiple_matches',
+          query,
+          matches: reps,
+          prompt: formatDisambigPrompt(reps),
+        });
+      }
+    } else if (ghl.status === 'ok') {
+      mergedContact = ghl.contact;
+      mergedSources = [ghl.contact.id];
+      duplicateCount = 1;
+    }
+
+    // Aggregate data across all merged records
+    let opportunities = ghl.opportunities || [];
+    let notes = ghl.notes || [];
+    let tasks = ghl.tasks || [];
+    let conversations = ghl.conversations || [];
+    let recentMessages = ghl.recentMessages || [];
+
+    if (duplicateCount > 1) {
+      const fanOutPromises = mergedSources.map(id =>
+        callGhlLookup(req, { contactId: id, includeMessages: true })
+      );
+      const fanOutResults = await Promise.all(fanOutPromises);
+
+      opportunities = [];
+      notes = [];
+      tasks = [];
+      conversations = [];
+      recentMessages = [];
+
+      for (const r of fanOutResults) {
+        if (r.status !== 'ok') continue;
+        opportunities.push(...(r.opportunities || []));
+        notes.push(...(r.notes || []));
+        tasks.push(...(r.tasks || []));
+        conversations.push(...(r.conversations || []));
+        recentMessages.push(...(r.recentMessages || []));
+      }
+
+      conversations.sort((a, b) => (b.lastMessageDate || 0) - (a.lastMessageDate || 0));
+      notes.sort((a, b) =>
+        new Date(b.dateAdded || 0).getTime() - new Date(a.dateAdded || 0).getTime()
+      );
+    }
+
+    // Calendar (if enabled)
+    const contactEmail = mergedContact?.email;
+    const contactName = mergedContact?.name;
     let calendar = { past: [], upcoming: [] };
 
     if (process.env.CALENDAR_ENABLED === 'true' && contactEmail) {
       try {
-        const calRes = await callCalendarSearch(req, {
-          email: contactEmail,
-          name: contactName,
-        });
+        const calRes = await callCalendarSearch(req, { email: contactEmail, name: contactName });
         if (!calRes.error) {
           calendar = { past: calRes.past || [], upcoming: calRes.upcoming || [] };
-        } else {
-          log('CAL_ERROR', calRes.error);
-          calendar.error = calRes.error;
         }
       } catch (e) {
         log('CAL_EXCEPTION', e.message);
-        calendar.error = e.message;
       }
-    } else {
-      log('CAL_SKIPPED', 'CALENDAR_ENABLED not set or no email');
     }
 
-    log('CAL_RESULT', `past=${calendar.past?.length || 0} upcoming=${calendar.upcoming?.length || 0}`);
-
-    // ── Step 3: Synthesize briefing via Claude ────────
-    const synthesisInput = buildSynthesisInput(ghl, calendar);
-    log('SYNTH_INPUT_LEN', synthesisInput.length);
+    // Synthesize
+    const synthesisInput = buildSynthesisInput({
+      contact: mergedContact,
+      duplicateCount,
+      opportunities,
+      notes,
+      tasks,
+      conversations,
+      recentMessages,
+      calendar,
+    });
 
     const claudeRes = await fetch(ANTHROPIC_URL, {
       method: 'POST',
@@ -168,24 +215,16 @@ export default async function handler(req, res) {
     if (!claudeRes.ok) {
       const text = await claudeRes.text();
       log('CLAUDE_ERR', text.slice(0, 300));
-      return res.status(500).json({ error: `Claude API ${claudeRes.status}: ${text.slice(0, 200)}` });
+      return res.status(500).json({ error: `Claude API ${claudeRes.status}` });
     }
 
     const claudeData = await claudeRes.json();
     const briefing = claudeData.content?.[0]?.text || '(no briefing generated)';
-    log('BRIEFING_LEN', briefing.length);
 
     return res.status(200).json({
       status: 'ok',
       briefing,
-      raw: {
-        contact: ghl.contact,
-        opportunities: ghl.opportunities,
-        notes: ghl.notes,
-        tasks: ghl.tasks,
-        conversations: ghl.conversations,
-        calendar,
-      },
+      raw: { contact: mergedContact, duplicateCount, opportunities, notes, tasks, conversations, calendar },
     });
   } catch (err) {
     log('FATAL', err.message);
@@ -194,24 +233,146 @@ export default async function handler(req, res) {
 }
 
 // ============================================================
+// Duplicate detection & merging
+// ============================================================
+
+function groupBySameHuman(matches) {
+  const groups = [];
+  for (const m of matches) {
+    const email = (m.email || '').toLowerCase().trim();
+    const phone = normalizePhone(m.phone);
+    let foundGroup = null;
+    for (const g of groups) {
+      for (const existing of g) {
+        const eEmail = (existing.email || '').toLowerCase().trim();
+        const ePhone = normalizePhone(existing.phone);
+        if ((email && eEmail && email === eEmail) ||
+            (phone && ePhone && phone === ePhone)) {
+          foundGroup = g;
+          break;
+        }
+      }
+      if (foundGroup) break;
+    }
+    if (foundGroup) foundGroup.push(m);
+    else groups.push([m]);
+  }
+  return groups;
+}
+
+function normalizePhone(p) {
+  if (!p) return null;
+  const digits = p.replace(/\D/g, '').replace(/^1/, '');
+  return digits.length >= 10 ? digits : null;
+}
+
+function mergeContacts(group) {
+  const sorted = [...group].sort((a, b) => fieldCount(b) - fieldCount(a));
+  const base = sorted[0];
+  const allTags = new Set();
+  const allSources = new Set();
+  let earliestDate = null;
+  let latestUpdate = null;
+
+  for (const c of group) {
+    (c.tags || []).forEach(t => allTags.add(t));
+    if (c.source) allSources.add(c.source);
+    const added = c.dateAdded ? new Date(c.dateAdded).getTime() : null;
+    const updated = c.dateUpdated ? new Date(c.dateUpdated).getTime() : null;
+    if (added && (!earliestDate || added < earliestDate)) earliestDate = added;
+    if (updated && (!latestUpdate || updated > latestUpdate)) latestUpdate = updated;
+  }
+
+  return {
+    ...base,
+    tags: Array.from(allTags),
+    source: Array.from(allSources).join(' / ') || base.source,
+    dateAdded: earliestDate ? new Date(earliestDate).toISOString() : base.dateAdded,
+    dateUpdated: latestUpdate ? new Date(latestUpdate).toISOString() : base.dateUpdated,
+    _mergedFrom: group.map(c => c.id),
+  };
+}
+
+function fieldCount(c) {
+  return ['email', 'phone', 'companyName', 'source', 'firstName', 'lastName']
+    .filter(f => c[f]).length + (c.tags?.length || 0);
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
 function formatDisambigPrompt(matches) {
   const lines = matches.slice(0, 8).map((m, i) => {
-    const tagPreview = (m.tags || []).slice(0, 2).join(', ') || 'no tags';
+    const tags = cleanTags(m.tags || []).slice(0, 2);
+    const tagPreview = tags.length ? tags.join(', ') : 'no tags';
     const source = m.source || 'unknown source';
-    return `${i + 1}. ${m.name} — ${source} (${tagPreview})`;
+    const dupNote = m._duplicateCount > 1 ? ` [${m._duplicateCount} records]` : '';
+    return `${i + 1}. ${m.name} — ${source}${dupNote} (${tagPreview})`;
   });
-  return `Found ${matches.length} matches. Which one?\n\n${lines.join('\n')}\n\nReply with the number.`;
+  return `Found ${matches.length} distinct people. Which one?\n\n${lines.join('\n')}\n\nReply with a more specific name to narrow it down.`;
 }
 
-function buildSynthesisInput(ghl, calendar) {
-  const c = ghl.contact || {};
+function cleanTags(tags) {
+  // Noise tags: confirmed junk only. When in doubt, keep the tag and let
+  // the LLM decide whether to surface it in the briefing.
+  const noiseExact = new Set([
+    'imported', 'openedonghl', 'no engagement',
+    'gmail bounced contacts',
+  ]);
+  return tags.filter(t => {
+    if (!t) return false;
+    const lower = t.toLowerCase().trim();
+    if (noiseExact.has(lower)) return false;
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(lower)) return false; // date strings like "5/27/2016 5:01 am"
+    if (/^changed2unconfirm/.test(lower)) return false;
+    // NOTE: keeping short tags — they may be meaningful business shorthand
+    return true;
+  });
+}
 
-  // Filter noise tags
-  const noiseTags = new Set(['imported', 'openedonghl', 'no engagement']);
-  const tags = (c.tags || []).filter(t => !noiseTags.has(t.toLowerCase()));
+function decodeConversationType(type) {
+  const map = {
+    'TYPE_PHONE': 'phone/SMS',
+    'TYPE_EMAIL': 'email',
+    'TYPE_SMS': 'SMS',
+    'TYPE_FB': 'Facebook',
+    'TYPE_IG': 'Instagram',
+    'TYPE_WEBCHAT': 'web chat',
+    'TYPE_CUSTOM': 'custom channel',
+    'TYPE_LIVE_CHAT': 'live chat',
+  };
+  return map[type] || (type ? String(type).replace('TYPE_', '').toLowerCase() : 'unknown');
+}
+
+function decodeMessageType(type) {
+  const stringMap = {
+    'TYPE_CAMPAIGN_EMAIL': 'campaign email',
+    'TYPE_CALL': 'phone call',
+    'TYPE_SMS': 'SMS',
+    'TYPE_EMAIL': 'email',
+    'TYPE_FB': 'Facebook message',
+    'TYPE_VOICEMAIL': 'voicemail',
+  };
+  const numMap = {
+    1: 'SMS',
+    2: 'email',
+    3: 'campaign email engagement',
+    4: 'campaign email',
+    5: 'phone call',
+    25: 'manual SMS',
+    26: 'manual email',
+  };
+  if (stringMap[type]) return stringMap[type];
+  if (numMap[type]) return numMap[type];
+  return typeof type === 'string'
+    ? type.replace('TYPE_', '').toLowerCase()
+    : 'engagement event';
+}
+
+function buildSynthesisInput(data) {
+  const c = data.contact || {};
+  const cleanedTags = cleanTags(c.tags || []);
 
   const summary = {
     contact: {
@@ -220,59 +381,52 @@ function buildSynthesisInput(ghl, calendar) {
       phone: c.phone,
       company: c.companyName,
       source: c.source,
-      tags: tags.slice(0, 8),
+      tags: cleanedTags.slice(0, 10),
       dateAdded: c.dateAdded,
       dateUpdated: c.dateUpdated,
       type: c.type,
     },
-    opportunities: (ghl.opportunities || []).map(o => ({
+    duplicateRecordCount: data.duplicateCount,
+    opportunities: (data.opportunities || []).map(o => ({
       name: o.name,
       status: o.status,
       value: o.monetaryValue,
-      pipelineStageId: o.pipelineStageId,
       lastStageChangeAt: o.lastStageChangeAt,
       updatedAt: o.updatedAt,
     })),
-    notes: (ghl.notes || [])
-      .filter(n => n.body && n.body !== 'nullnull')
+    notes: (data.notes || [])
+      .filter(n => n.body && n.body !== 'nullnull' && n.body.trim().length > 0)
       .slice(0, 5)
       .map(n => ({ body: n.body?.slice(0, 200), dateAdded: n.dateAdded })),
-    tasks: (ghl.tasks || []).map(t => ({
+    tasks: (data.tasks || []).map(t => ({
       title: t.title,
       completed: t.completed,
       dueDate: t.dueDate,
     })),
-    conversations: (ghl.conversations || []).slice(0, 5).map(co => ({
-      type: co.type,
-      lastMessageType: co.lastMessageType,
+    conversations: (data.conversations || []).slice(0, 5).map(co => ({
+      channel: decodeConversationType(co.type),
+      lastMessageType: decodeMessageType(co.lastMessageType),
       lastMessageDate: co.lastMessageDate
         ? new Date(co.lastMessageDate).toISOString()
         : null,
       direction: co.lastMessageDirection,
-      body: co.lastMessageBody?.slice(0, 200),
+      body: co.lastMessageBody?.slice(0, 200) || null,
     })),
-    recentMessages: (ghl.recentMessages || []).slice(0, 5).map(m => ({
-      type: m.type,
+    recentMessages: (data.recentMessages || []).slice(0, 5).map(m => ({
+      type: decodeMessageType(m.type),
       direction: m.direction,
       dateAdded: m.dateAdded,
-      body: m.body?.slice(0, 200),
+      body: m.body?.slice(0, 200) || null,
     })),
     calendar: {
-      past: (calendar.past || []).slice(0, 5).map(e => ({
-        summary: e.summary,
-        start: e.start,
-      })),
-      upcoming: (calendar.upcoming || []).slice(0, 5).map(e => ({
-        summary: e.summary,
-        start: e.start,
-      })),
-      error: calendar.error,
+      past: (data.calendar?.past || []).slice(0, 5).map(e => ({ summary: e.summary, start: e.start })),
+      upcoming: (data.calendar?.upcoming || []).slice(0, 5).map(e => ({ summary: e.summary, start: e.start })),
     },
   };
 
   return `Today's date: ${new Date().toISOString().slice(0, 10)}
 
-Generate the 5-line briefing for this contact:
+Generate the 5-line briefing for this contact. Apply all rules — especially: omit anything you can't confidently interpret, translate all internal codes, never expose raw data shapes.
 
 ${JSON.stringify(summary, null, 2)}`;
 }

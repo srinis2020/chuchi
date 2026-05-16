@@ -1,5 +1,7 @@
 // ============================================================
 // /api/chat — Chuchi's brain with memory + auth
+// Now with CRM intent router: CRM queries route to /api/client-agent.
+// Non-CRM queries flow through memory-enabled Claude as before.
 // ============================================================
 
 import crypto from 'node:crypto';
@@ -26,6 +28,69 @@ function verifyAuth(req) {
   }
 }
 
+// ============================================================
+// CRM intent router — shared logic with telegram-webhook
+// ============================================================
+
+function detectCrmIntent(text) {
+  const t = text.trim().toLowerCase();
+
+  const whoIs = t.match(/^who(?:'s| is)\s+(.+?)\??$/);
+  if (whoIs) return { intent: 'crm_lookup', query: whoIs[1].trim() };
+
+  const tellMe = t.match(/^tell me about\s+(.+?)\??$/);
+  if (tellMe) return { intent: 'crm_lookup', query: tellMe[1].trim() };
+
+  const history = t.match(/^what(?:'s| is)\s+my\s+(?:history|interaction|relationship)\s+with\s+(.+?)\??$/);
+  if (history) return { intent: 'crm_lookup', query: history[1].trim() };
+
+  const lookup = t.match(/^(?:look\s*up|find)\s+(.+?)(?:\s+in\s+(?:crm|gohighlevel|ghl))?\??$/);
+  if (lookup && lookup[1].length > 1 && !lookup[1].includes(' ')) {
+    return { intent: 'crm_lookup', query: lookup[1].trim() };
+  }
+  if (lookup && t.includes('crm')) {
+    return { intent: 'crm_lookup', query: lookup[1].replace(/\s+in\s+(crm|ghl|gohighlevel).*$/, '').trim() };
+  }
+
+  return { intent: 'general' };
+}
+
+function baseUrl(req) {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
+  const host = req.headers.host;
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  return `${proto}://${host}`;
+}
+
+async function callClientAgent(req, query) {
+  const url = `${baseUrl(req)}/api/client-agent`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`Client Agent ${r.status}: ${t.slice(0, 200)}`);
+  }
+  return r.json();
+}
+
+// Wrap a CRM briefing in the Anthropic-style response shape so the browser
+// UI can render it identically to a normal Claude reply.
+function asClaudeReply(text) {
+  return {
+    content: [{ type: 'text', text }],
+    role: 'assistant',
+    model: 'client-agent',
+    stop_reason: 'end_turn',
+  };
+}
+
+// ============================================================
+// Main handler
+// ============================================================
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -33,7 +98,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // ─── AUTH GATE ────────────────────────────────────
   if (!verifyAuth(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -51,6 +115,39 @@ export default async function handler(req, res) {
   const memoryEnabled = !!(SUPABASE_URL && SUPABASE_KEY);
   const debug = { memory_enabled: memoryEnabled };
 
+  // ── CRM router (runs BEFORE memory + Claude call) ──
+  const routed = typeof latestUserMsg === 'string' ? detectCrmIntent(latestUserMsg) : { intent: 'general' };
+  debug.route = routed.intent;
+
+  if (routed.intent === 'crm_lookup') {
+    try {
+      const agentRes = await callClientAgent(req, routed.query);
+
+      let reply;
+      if (agentRes.status === 'multiple_matches') {
+        reply = agentRes.prompt;
+      } else if (agentRes.status === 'no_match') {
+        reply = agentRes.briefing;
+      } else if (agentRes.status === 'ok') {
+        reply = agentRes.briefing;
+      } else if (agentRes.error) {
+        reply = `Couldn't pull that contact. ${agentRes.error}`;
+      } else {
+        reply = 'Got an unexpected response from the CRM lookup.';
+      }
+
+      const payload = asClaudeReply(reply);
+      payload._debug = debug;
+      return res.status(200).json(payload);
+    } catch (e) {
+      debug.crm_error = e.message;
+      const payload = asClaudeReply(`Couldn't reach the CRM lookup. ${e.message}`);
+      payload._debug = debug;
+      return res.status(200).json(payload);
+    }
+  }
+
+  // ── General path: memory + Claude (unchanged) ─────
   try {
     let memoryBlock = '';
     if (memoryEnabled) {
@@ -73,7 +170,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: body.model || 'claude-sonnet-4-20250514',
+        model: body.model || 'claude-sonnet-4-5',
         max_tokens: body.max_tokens || 1000,
         system: systemWithMemory,
         messages,
